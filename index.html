@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spotify Song Info</title>
+    <link rel="stylesheet" href="style.css"> <!-- Link to your external CSS file -->
+</head>
+
+<body>
+    <h1>Spotify Song Info</h1>
+    <div id="app">
+        <form onsubmit="fetchSongData(event)">
+            <input type="text" id="songUrl" placeholder="Enter Spotify Song URL" required>
+            <input type="password" id="adminPassword" placeholder="Enter Admin Password" required>
+            <button type="submit">Get Song Info</button>
+        </form>
+        <div class="song-info" id="songInfo" style="display: none;">
+            <h2 id="songTitle"></h2>
+            <img id="albumImage" alt="Album Cover" class="album-image">
+            <p class="info-label">Album:</p>
+            <p class="info-value" id="albumName"></p>
+            <p class="info-label">Release Date:</p>
+            <p class="info-value" id="releaseDate"></p>
+            <p class="info-label">Duration:</p>
+            <p class="info-value" id="duration"></p>
+            <p class="info-label">Explicit:</p>
+            <p class="info-value" id="explicit"></p>
+            <p class="info-label">Popularity:</p>
+            <p class="info-value" id="popularity"></p>
+            <p class="external-link"><strong>External URL:</strong> <a id="spotifyLink" target="_blank" rel="noopener noreferrer" class="external-link-url"></a></p>
+            <div class="extra-info">
+                <h3>Audio Features:</h3>
+                <p><strong>Danceability:</strong> <span id="danceability"></span></p>
+                <p><strong>Energy:</strong> <span id="energy"></span></p>
+                <p><strong>Key:</strong> <span id="key"></span></p>
+                <p><strong>Loudness:</strong> <span id="loudness"></span></p>
+                <p><strong>Mode:</strong> <span id="mode"></span></p>
+                <p><strong>Speechiness:</strong> <span id="speechiness"></span></p>
+                <p><strong>Acousticness:</strong> <span id="acousticness"></span></p>
+                <p><strong>Instrumentalness:</strong> <span id="instrumentalness"></span></p>
+                <p><strong>Valence:</strong> <span id="valence"></span></p>
+                <p><strong>Tempo:</strong> <span id="tempo"></span> BPM</p>
+                <p><strong>Time Signature:</strong> <span id="timeSignature"></span></p>
+            </div>
+            <h3>Genres:</h3>
+            <p id="genres"></p>
+        </div>
+    </div>
+
+    <!-- React and ReactDOM via CDN -->
+    <script src="https://unpkg.com/react@17/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@17/umd/react-dom.development.js"></script>
+
+    <!-- Babel for JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <script>
+        const fetchToken = async (password) => {
+            const response = await fetch('https://spotify.killameep.com/gettoken', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ password })
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to fetch token. Check your password.');
+            }
+
+            const data = await response.json();
+            return data.token;
+        };
+
+        const fetchSongData = async (event) => {
+            event.preventDefault(); // Prevent default form submission
+
+            const url = document.getElementById('songUrl').value;
+            const password = document.getElementById('adminPassword').value;
+
+            try {
+                const token = await fetchToken(password);
+
+                const trackId = getTrackId(url);
+                const trackResponse = await fetch(`https://api.spotify.com/v1/tracks/${trackId}`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (!trackResponse.ok) {
+                    throw new Error('Failed to fetch song data. Please check your URL and token.');
+                }
+
+                const data = await trackResponse.json();
+                displaySongInfo(data);
+
+                // Fetch audio features
+                const featuresResponse = await fetch(`https://api.spotify.com/v1/audio-features/${trackId}`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (featuresResponse.ok) {
+                    const featuresData = await featuresResponse.json();
+                    displayAudioFeatures(featuresData);
+                }
+
+                // Fetch artist genres
+                const artistId = data.artists[0].id; // Assuming we take the first artist
+                const artistResponse = await fetch(`https://api.spotify.com/v1/artists/${artistId}`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (artistResponse.ok) {
+                    const artistData = await artistResponse.json();
+                    document.getElementById('genres').innerText = artistData.genres.join(', ');
+                }
+
+            } catch (err) {
+                alert(err.message);
+            }
+        };
+
+        const getTrackId = (url) => {
+            const regex = /track\/([a-zA-Z0-9]+)/;
+            const match = url.match(regex);
+            return match ? match[1] : null;
+        };
+
+        const displaySongInfo = (data) => {
+            document.getElementById('songTitle').innerText = data.name;
+            document.getElementById('albumName').innerText = data.album.name;
+            document.getElementById('releaseDate').innerText = data.album.release_date;
+
+            // Convert duration from milliseconds to minutes:seconds format
+            const durationInSeconds = Math.floor(data.duration_ms / 1000);
+            const minutes = Math.floor(durationInSeconds / 60);
+            const seconds = durationInSeconds % 60;
+            document.getElementById('duration').innerText = `${minutes} minutes ${seconds} seconds`;
+
+            document.getElementById('explicit').innerText = data.explicit ? 'Yes' : 'No';
+            document.getElementById('popularity').innerText = data.popularity;
+            document.getElementById('spotifyLink').innerText = 'Spotify Link';
+            document.getElementById('spotifyLink').href = data.external_urls.spotify;
+
+            // Show the album image
+            const albumImage = document.getElementById('albumImage');
+            albumImage.src = data.album.images[0]?.url;
+            albumImage.alt = data.name;
+
+            // Show the song info container
+            document.getElementById('songInfo').style.display = 'block';
+        };
+
+        const displayAudioFeatures = (featuresData) => {
+            document.getElementById('danceability').innerText = featuresData.danceability;
+            document.getElementById('energy').innerText = featuresData.energy;
+            document.getElementById('key').innerText = featuresData.key;
+            document.getElementById('loudness').innerText = featuresData.loudness + ' dB';
+            document.getElementById('mode').innerText = featuresData.mode;
+            document.getElementById('speechiness').innerText = featuresData.speechiness;
+            document.getElementById('acousticness').innerText = featuresData.acousticness;
+            document.getElementById('instrumentalness').innerText = featuresData.instrumentalness;
+            document.getElementById('valence').innerText = featuresData.valence;
+            document.getElementById('tempo').innerText = featuresData.tempo;
+            document.getElementById('timeSignature').innerText = featuresData.time_signature;
+        };
+    </script>
+</body>
+
+</html>
